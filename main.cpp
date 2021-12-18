@@ -40,12 +40,12 @@ int main(int, char **)
         AUTHR_MSG auth_msg;
         auth_msg.host = "api.live.bilibili.com";
         auth_msg.port = "443";
-        auth_msg.target = "/room/v1/Room/room_init?id=270689";
-        auto resp = sync_https_get<http::string_body>(ioc, ctx, auth_msg.host, auth_msg.port, auth_msg.target, 11).body();
+        auth_msg.target = "/room/v1/Room/room_init?id=21403601";
+        auto resp = sync_https_get<http::string_body>(ioc, ctx, auth_msg, 11).body();
         std::string rid = findvalue(resp, "data", "room_id\":", ",");
         auth_msg.rid = stoi(rid);
         auth_msg.target = "/room/v1/Danmu/getConf?room_id=" + rid + "&platform=pc&player=12176";
-        resp = sync_https_get<http::string_body>(ioc, ctx, auth_msg.host, auth_msg.port, auth_msg.target, 11).body();
+        resp = sync_https_get<http::string_body>(ioc, ctx, auth_msg, 11).body();
         auth_msg.key = findvalue(resp, "data", "token\":\"", "\"");
         auth_msg.host = "broadcastlv.chat.bilibili.com";
         auth_msg.target = "/sub";

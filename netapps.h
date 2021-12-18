@@ -35,6 +35,8 @@ namespace danmu
         std::unique_ptr<char[]> buff;
     };
 
+    using DANMU_HANDLE = std::function<void(DANMU_MSG &)>;
+
     template <typename C, typename... CP>
     std::string findvalue(const std::string &str, C fch, CP... chs)
     {
@@ -44,20 +46,20 @@ namespace danmu
     }
     template <typename T>
     netapps::http::response<T> sync_https_get(netbase::io_context &ioc, netbase::ssl::context &ctx,
-                                              std::string &host, const std::string &port, const std::string &target, int version)
+                                              AUTHR_MSG &msg, int version)
     {
         netbase::ip::tcp::resolver resolver(ioc);
         netapps::ssl_stream<netapps::tcp_stream> stream(ioc, ctx);
-        if (!SSL_set_tlsext_host_name(stream.native_handle(), host.c_str()))
+        if (!SSL_set_tlsext_host_name(stream.native_handle(), msg.host.c_str()))
         {
             netapps::error_code ec(static_cast<int>(::ERR_get_error()), netbase::error::get_ssl_category());
             throw netapps::system_error{ec};
         }
-        auto const results = resolver.resolve(host, port);
+        auto const results = resolver.resolve(msg.host, msg.port);
         netapps::get_lowest_layer(stream).connect(results);
         stream.handshake(netbase::ssl::stream_base::client);
-        netapps::http::request<netapps::http::string_body> req{netapps::http::verb::get, target, version};
-        req.set(netapps::http::field::host, host);
+        netapps::http::request<netapps::http::string_body> req{netapps::http::verb::get, msg.target, version};
+        req.set(netapps::http::field::host, msg.host);
         req.set(netapps::http::field::user_agent, USER_AGENT);
         netapps::http::write(stream, req);
         netapps::http::response<T> resp;
@@ -96,7 +98,26 @@ namespace danmu
     void co_wss_connect(AUTHR_MSG auth_msg, netbase::io_context &ioc,
                         netbase::ssl::context &ctx, netbase::yield_context yield);
     std::string auth_pack(unsigned int room_id, const char *key);
-    std::string ping_pack();
+
+    class Parser
+    {
+    private:
+        std::string remained;
+        DANMU_HANDLE uhandler;
+
+    public:
+        Parser(DANMU_HANDLE &&uhd);
+        ~Parser();
+        Parser(const Parser &) = delete;
+        Parser(Parser &&) = delete;
+        Parser operator=(const Parser &) = delete;
+        Parser operator=(Parser &&) = delete;
+
+        void parser(const std::string &msg, size_t bytf);
+
+    private:
+        void process_data(const char *buf, unsigned int ilen, unsigned int typ);
+    };
     void process_message(std::string &msg, size_t len);
     void process_pack(const char *buff, const unsigned ilen, const unsigned type);
 }

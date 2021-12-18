@@ -48,10 +48,13 @@ void danmu::co_wss_connect(AUTHR_MSG auth_msg, netbase::io_context &ioc,
                        }
                    });
     flat_buffer buf;
+    Parser pack_parser([](DANMU_MSG &f)
+                       { std::cout << f.buff << std::endl; });
     for (;;)
     {
         size_t bytf = ws->async_read(buf, yield);
-        process_message(buffers_to_string(buf.data()), bytf);
+        // process_message(buffers_to_string(buf.data()), bytf);
+        pack_parser.parser(buffers_to_string(buf.data()), bytf);
         buf.clear();
     }
     hbt->cancel();
@@ -81,52 +84,76 @@ std::string danmu::auth_pack(unsigned int room_id, const char *key)
     return std::string(msg, buflen + 16);
 }
 
-void danmu::process_message(std::string &msg, size_t len)
+danmu::Parser::Parser(DANMU_HANDLE &&uhd)
+    : uhandler(std::forward<DANMU_HANDLE>(uhd))
+{
+}
+
+danmu::Parser::~Parser() {}
+
+void danmu::Parser::parser(const std::string &msg, size_t len)
 {
     size_t pos = 0;
     size_t ireclen;
+    // currently bilibili always send complete packs in a frame.
+    remained = msg;
     while (pos < len)
     {
-        const unsigned char *precv = (const unsigned char *)msg.c_str();
+        const unsigned char *precv = (const unsigned char *)(msg.c_str());
         if (len < pos + 16)
         {
+            if (pos != 0)
+            {
+                remained = remained.substr(pos, len - pos);
+            }
             return;
         }
         ireclen = precv[pos + 1] << 16 | precv[pos + 2] << 8 | precv[pos + 3];
         if (ireclen < 16 || ireclen > 5000)
         {
+            // error
+            remained.clear();
             return;
         }
         if (len < pos + ireclen)
         {
+            if (pos != 0)
+            {
+                remained = remained.substr(pos, len - pos);
+            }
             return;
         }
-        unsigned int type = check_pack(precv + pos);
-        if (!type)
+        unsigned int typ = check_pack(precv + pos);
+        if (!typ)
         {
+            // error
+            remained.clear();
             return;
         }
-        process_pack(msg.c_str() + pos, (unsigned int)ireclen, type);
+        else
+        {
+            process_data(remained.c_str() + pos, ireclen, typ);
+        }
         pos += ireclen;
     }
 }
 
-void danmu::process_pack(const char *buff, const unsigned int ilen, const unsigned int type)
+void danmu::Parser::process_data(const char *buff, unsigned int ilen, unsigned int typ)
 {
+    // version==2,compressed data.
     if (buff[7] != 2)
     {
         DANMU_MSG info;
-        info.type = type;
+        info.type = typ;
         info.ver = buff[7];
         info.len = ilen - 16;
         if (ilen > 16)
         {
             info.buff.reset(new char[info.len + 1]);
             memcpy(info.buff.get(), buff + 16, info.len);
-            info.buff.get()[info.len] = 0;
+            info.buff[info.len] = 0;
         }
-        // handler_msg(&info);
-        std::cout << info.buff << std::endl;
+        uhandler(info);
         return;
     }
     else
@@ -139,7 +166,8 @@ void danmu::process_pack(const char *buff, const unsigned int ilen, const unsign
         strm.next_in = Z_NULL;
         if (inflateInit(&strm) != Z_OK)
         {
-            throw std::logic_error("Zlib init failed.");
+            std::cerr << "Zlib init failed." << std::endl;
+            // throw std::logic_error("Zlib init failed.");
             return;
         }
         strm.avail_in = ilen - 16;
@@ -186,15 +214,16 @@ void danmu::process_pack(const char *buff, const unsigned int ilen, const unsign
                 success = false;
                 break;
             }
-            info.buff.get()[info.len] = 0;
-            // handler_msg(&info);
-            std::cout << info.buff << std::endl;
+            info.buff[info.len] = 0;
+            uhandler(info);
         } while (ret == Z_OK);
         if (!success)
         {
-            throw std::logic_error("Decompression failed.");
+            std::cerr << "Decompression failed." << std::endl;
+            return;
+            // throw std::logic_error("Decompression failed.");
         }
         inflateEnd(&strm);
     }
     return;
-}
+};
