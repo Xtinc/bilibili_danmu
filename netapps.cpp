@@ -1,6 +1,10 @@
-#include "netapps.h"
+#include "include/netapps.h"
+#include "include/Countdanmu.h"
+#include "include/Countdanmu.h"
 #include <boost/asio/buffers_iterator.hpp>
-#include <iostream>
+#include <fstream>
+#include <iomanip>
+#include <ctime>
 #include <zlib.h>
 
 using namespace danmu;
@@ -12,6 +16,7 @@ void danmu::co_wss_connect(AUTHR_MSG auth_msg, netbase::io_context &ioc,
 
     auto ws = std::make_shared<websocket::stream<ssl_stream<tcp_stream>>>(ioc, ctx);
     auto hbt = std::make_shared<netbase::steady_timer>(ioc);
+    auto sts = std::make_shared<STS_INFO>();
 
     netbase::ip::tcp::resolver resolver(ioc);
     auto const results = resolver.async_resolve(auth_msg.host, auth_msg.port, yield);
@@ -38,27 +43,41 @@ void danmu::co_wss_connect(AUTHR_MSG auth_msg, netbase::io_context &ioc,
     ws->async_write(netbase::buffer(authp.data(), authp.size()), yield);
     ws->async_write(netbase::buffer(PING_PACK, 31), yield);
     netbase::spawn(yield,
-                   [ws, hbt](netbase::yield_context yield2)
+                   [ws, hbt, sts, auth_msg](netbase::yield_context yield)
                    {
+                       std::ofstream file(std::to_string(auth_msg.rid) + ".txt");
+                       if (!file)
+                       {
+                           throw std::logic_error("Can't open output file for record.");
+                       }
+                       double msg_perid = 0;
+                       file << std::setw(20) << "#time" << std::setw(12) << "msg_counts"
+                            << std::setw(12) << "msg_sec" << std::setw(12) << "SC_counts"
+                            << std::setw(12) << "SC_prices" << std::setw(12) << "Gift_Wt"
+                            << std::setw(12) << "Gift_prices" << std::endl;
                        for (;;)
                        {
+                           msg_perid = sts->msg_c;
                            hbt->expires_from_now(std::chrono::seconds(30));
-                           hbt->async_wait(yield2);
-                           ws->async_write(netbase::buffer(PING_PACK, 31), yield2);
+                           hbt->async_wait(yield);
+                           ws->async_write(netbase::buffer(PING_PACK, 31), yield);
+                           file << std::setw(20) << currentDateTime() << std::setw(12)
+                                << sts->msg_c << std::setw(12) << (sts->msg_c - msg_perid) / 30.0
+                                << std::setw(12) << sts->sc_c << std::setw(12)
+                                << sts->sc_p << std::setw(12) << sts->gf_a << std::setw(12)
+                                << sts->gf_p / 1000.0 << std::endl;
                        }
                    });
-    flat_buffer buf;
-    Parser pack_parser([](DANMU_MSG &f)
-                       { std::cout << f.buff << std::endl; });
-    for (;;)
-    {
-        size_t bytf = ws->async_read(buf, yield);
-        // process_message(buffers_to_string(buf.data()), bytf);
-        pack_parser.parser(buffers_to_string(buf.data()), bytf);
-        buf.clear();
-    }
-    hbt->cancel();
-    ws->async_close(websocket::close_code::normal, yield);
+    /*     flat_buffer buf;
+        Parser pack_parser(std::bind(&PrintBiliMsg, std::placeholders::_1, sts));
+        for (;;)
+        {
+            size_t bytf = ws->async_read(buf, yield);
+            pack_parser.parser(buffers_to_string(buf.data()), bytf);
+            buf.clear();
+        }
+        hbt->cancel();
+        ws->async_close(websocket::close_code::normal, yield); */
 }
 
 std::string danmu::auth_pack(unsigned int room_id, const char *key)
@@ -82,6 +101,32 @@ std::string danmu::auth_pack(unsigned int room_id, const char *key)
     memcpy(&msg[8], &popc, 4);
     memcpy(&msg[12], &pseq, 4);
     return std::string(msg, buflen + 16);
+}
+
+void danmu::PrintBiliMsg(DANMU_MSG &info, STS_INFO &sts)
+{
+    switch (info.type)
+    {
+    case 0x03:
+    {
+        break;
+    }
+    case 0x05:
+    {
+        ParseJSON(info.buff.get(), sts);
+        break;
+    }
+    case 0x08:
+    {
+        std::cout << "Link start..." << std::endl;
+        break;
+    }
+    default:
+    {
+        std::cout << "Unknown msg type: " << info.type << info.buff << std::endl;
+        break;
+    }
+    }
 }
 
 danmu::Parser::Parser(DANMU_HANDLE &&uhd)
@@ -132,7 +177,7 @@ void danmu::Parser::parser(const std::string &msg, size_t len)
         }
         else
         {
-            process_data(remained.c_str() + pos, ireclen, typ);
+            process_data(remained.c_str() + pos, static_cast<unsigned int>(ireclen), typ);
         }
         pos += ireclen;
     }
@@ -227,3 +272,79 @@ void danmu::Parser::process_data(const char *buff, unsigned int ilen, unsigned i
     }
     return;
 };
+
+danmu::co_websocket::co_websocket(AUTHR_MSG _auth_msg, netbase::io_context &ioc, netbase::ssl::context &ctx)
+    : ws(ioc, ctx), hbt(ioc), resolver(ioc), auth_msg(_auth_msg)
+{
+}
+
+danmu::co_websocket::~co_websocket() {}
+
+void danmu::co_websocket::co_connect(netbase::yield_context yield)
+{
+    auto const results = resolver.async_resolve(auth_msg.host, auth_msg.port, yield);
+    get_lowest_layer(ws).expires_after(std::chrono::seconds(15));
+    auto ep = get_lowest_layer(ws).async_connect(results, yield);
+    if (!SSL_set_tlsext_host_name(ws.next_layer().native_handle(), auth_msg.host.c_str()))
+    {
+        error_code ec(static_cast<int>(::ERR_get_error()), net::error::get_ssl_category());
+        throw system_error{ec};
+    }
+    auth_msg.host += ':' + std::to_string(ep.port());
+    get_lowest_layer(ws).expires_after(std::chrono::seconds(15));
+    ws.set_option(websocket::stream_base::decorator(
+        [](websocket::request_type &req)
+        {
+            req.set(http::field::user_agent, USER_AGENT);
+        }));
+    ws.next_layer().async_handshake(netbase::ssl::stream_base::client, yield);
+    get_lowest_layer(ws).expires_never();
+    ws.set_option(websocket::stream_base::timeout::suggested(role_type::client));
+    ws.async_handshake(auth_msg.host, auth_msg.target, yield);
+    ws.binary(true);
+    auto authp = auth_pack(auth_msg.rid, auth_msg.key.c_str());
+    ws.async_write(netbase::buffer(authp.data(), authp.size()), yield);
+    ws.async_write(netbase::buffer(PING_PACK, 31), yield);
+    auto self = shared_from_this();
+    netbase::spawn(yield,
+                   [self](netbase::yield_context yield)
+                   {
+                       std::ofstream file(std::to_string(self->auth_msg.rid) + ".txt");
+                       if (!file)
+                       {
+                           throw std::logic_error("Can't open output file for record.");
+                       }
+                       double msg_perid = 0;
+                       file << std::setw(20) << "#time" << std::setw(12) << "msg_counts"
+                            << std::setw(12) << "msg_sec" << std::setw(12) << "SC_counts"
+                            << std::setw(12) << "SC_prices" << std::setw(12) << "Gift_Wt"
+                            << std::setw(12) << "Gift_prices" << std::endl;
+                       for (;;)
+                       {
+                           msg_perid = self->sts.msg_c;
+                           self->hbt.expires_from_now(std::chrono::seconds(30));
+                           self->hbt.async_wait(yield);
+                           self->ws.async_write(netbase::buffer(PING_PACK, 31), yield);
+                           file << std::setw(20) << currentDateTime() << std::setw(12)
+                                << self->sts.msg_c << std::setw(12) << (self->sts.msg_c - msg_perid) / 30.0
+                                << std::setw(12) << self->sts.sc_c << std::setw(12)
+                                << self->sts.sc_p << std::setw(12) << self->sts.gf_a << std::setw(12)
+                                << self->sts.gf_p / 1000.0 << std::endl;
+                       }
+                   });
+    flat_buffer buf;
+    Parser pack_parser(std::bind(&PrintBiliMsg, std::placeholders::_1, std::ref(sts)));
+    for (;;)
+    {
+        size_t bytf = ws.async_read(buf, yield);
+        pack_parser.parser(buffers_to_string(buf.data()), bytf);
+        buf.clear();
+    }
+}
+
+void danmu::co_websocket::stop()
+{
+    hbt.cancel();
+    ws.async_close(websocket::close_code::normal, [](error_code ec)
+                   { std::cout << " Websocket closed." << std::endl; });
+}
