@@ -30,6 +30,7 @@ namespace danmu
         DM_GUARD_BUY,
         DM_ANCHOR_LOT_END,
         DM_ANCHOR_LOT_AWARD,
+        DMUSER_TOAST_MSG
     };
 
     class Bili_CMD_TYPE
@@ -55,7 +56,7 @@ namespace danmu
             {"SUPER_CHAT_MESSAGE_JPN", BCMD::DM_SUPER_CHAT_MESSAGE_JPN},
             {"NOTICE_MSG", BCMD::DM_NOTICE_MSG},
             {"GUARD_BUY", BCMD::DM_GUARD_BUY},
-            {"HOT_ROOM_NOTIFY",BCMD::DM_HOT_ROOM_NOTIFY}};
+            {"HOT_ROOM_NOTIFY", BCMD::DM_HOT_ROOM_NOTIFY}};
 
     public:
         static BCMD Check(const char *cmd_typ)
@@ -82,9 +83,9 @@ namespace danmu
         };
     };
 
-    void ParseJSON(const char *msg, STS_INFO &sts);
+    void ParseJSON(const char *msg, STS_INFO &sts, SQLPTR &db);
 
-    void PrintBiliMsg(DANMU_MSG &info, STS_INFO &sts);
+    void PrintBiliMsg(DANMU_MSG &info, STS_INFO &sts, SQLPTR &db);
 
     class Parser
     {

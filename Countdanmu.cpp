@@ -3,6 +3,7 @@
 #include <zlib.h>
 #include <iostream>
 #include <iomanip>
+#include <sqlite3.h>
 
 #define _JSTR .get<std::string>()
 #define _JINT .get<int>()
@@ -10,7 +11,7 @@
 using namespace danmu;
 using njson = nlohmann::json;
 
-void danmu::ParseJSON(const char *msg, STS_INFO &sts)
+void danmu::ParseJSON(const char *msg, STS_INFO &sts, SQLPTR &db)
 {
     try
     {
@@ -20,14 +21,19 @@ void danmu::ParseJSON(const char *msg, STS_INFO &sts)
         unsigned cnt = 0;
         unsigned price = 0;
         unsigned dms = 0;
+        std::string uname, d_msg;
         switch (Bili_CMD_TYPE::Check(CMD))
         {
         case BCMD::DM_NONE:
             std::cout << "Unknown command type: " << CMD << std::endl;
             break;
         case BCMD::DM_DANMU_MSG:
+            uname = j["info"][2][1] _JSTR;
+            d_msg = j["info"][1] _JSTR;
             ++sts.msg_c;
-            std::cout << TMN << "MSG] " << j["info"][2][1] _JSTR << u8" 说 " << j["info"][1] _JSTR << std::endl;
+            std::cout << TMN << "MSG] " << uname << u8" 说 " << d_msg << std::endl;
+            d_msg = "INSERT INTO danmu (ID,NAME,MSG,PRICE) VALUES(NULL,\'" + uname + "\',\'" + d_msg + "\',0);";
+            sqlite3_exec(db, d_msg.c_str(), NULL, NULL, NULL);
             break;
         case BCMD::DM_LIVE_INTERACTIVE_GAME:
             //? 作用？
@@ -40,9 +46,13 @@ void danmu::ParseJSON(const char *msg, STS_INFO &sts)
         case BCMD::DM_SUPER_CHAT_MESSAGE_JPN:
             ++sts.sc_c;
             price = j["data"]["price"] _JINT;
+            uname = j["data"]["user_info"]["uname"] _JSTR;
+            d_msg = j["data"]["message"] _JSTR;
             sts.sc_p += price;
-            std::cout << TMN << "SPC] " << j["data"]["user_info"]["uname"] _JSTR << u8" 打赏 " << " $" << price << u8" 说 "
-                      << j["data"]["message"] _JSTR << std::endl;
+            std::cout << TMN << "SPC] " << uname << u8" 打赏 " << " $" << price << u8" 说 "
+                      << d_msg << std::endl;
+            d_msg = "INSERT INTO danmu (ID,NAME,MSG,PRICE) VALUES(NULL,\'" + uname + "\',\'" + d_msg + "\'," + std::to_string(price) + ");";
+            sqlite3_exec(db, d_msg.c_str(), NULL, NULL, NULL);
             break;
         case BCMD::DM_SEND_GIFT:
             cnt = j["data"]["num"] _JINT;
@@ -234,7 +244,7 @@ void danmu::Parser::process_data(const char *buff, unsigned int ilen, unsigned i
     return;
 };
 
-void danmu::PrintBiliMsg(DANMU_MSG &info, STS_INFO &sts)
+void danmu::PrintBiliMsg(DANMU_MSG &info, STS_INFO &sts, SQLPTR &db)
 {
     switch (info.type)
     {
@@ -244,7 +254,7 @@ void danmu::PrintBiliMsg(DANMU_MSG &info, STS_INFO &sts)
     }
     case 0x05:
     {
-        ParseJSON(info.buff.get(), sts);
+        ParseJSON(info.buff.get(), sts, db);
         break;
     }
     case 0x08:

@@ -54,6 +54,8 @@ namespace danmu
 
     std::string auth_pack(unsigned int room_id, const char *key);
 
+    void init_db(SQLPTR &db, unsigned int rid);
+
     class co_websocket : public std::enable_shared_from_this<co_websocket>
     {
     private:

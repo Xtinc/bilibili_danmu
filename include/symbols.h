@@ -6,8 +6,12 @@
 #include <functional>
 #include <ctime>
 
+struct sqlite3;
+
 namespace danmu
 {
+    using SQLPTR = sqlite3 *;
+
     inline static const char *USER_AGENT{"Mozilla/5.0 (Windows NT 10.0; Win64; x64) \
     AppleWebKit/537.36 (KHTML, like Gecko) Chrome/96.0.4664.110 Safari/537.36 Edg/96.0.1054.57"};
     inline static const char PING_PACK[31]{0, 0, 0, 0x1f, 0, 0x10, 0, 0x1, 0, 0, 0, 0x2, 0, 0, 0, 0x1,

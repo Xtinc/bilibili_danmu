@@ -2,6 +2,7 @@
 #include "include/Countdanmu.h"
 #include <boost/asio/buffers_iterator.hpp>
 #include <fstream>
+#include <sqlite3.h>
 
 using namespace danmu;
 using namespace netapps;
@@ -62,8 +63,12 @@ void danmu::co_websocket::co_connect(netbase::yield_context yield)
     ws.async_write(netbase::buffer(authp.data(), authp.size()), yield);
     ws.async_write(netbase::buffer(PING_PACK, 31), yield);
     auto self = shared_from_this();
+    SQLPTR dbc;
+    auto db_guard = MakeGuard([&dbc]
+                              { sqlite3_close(dbc); });
+    init_db(dbc, auth_msg.rid);
     netbase::spawn(yield,
-                   [self](netbase::yield_context yield)
+                   [self, &dbc](netbase::yield_context yield)
                    {
                        std::ofstream file(std::to_string(self->auth_msg.rid) + ".txt", std::ios::app);
                        if (!file)
@@ -84,6 +89,7 @@ void danmu::co_websocket::co_connect(netbase::yield_context yield)
                             << std::setw(12) << "GFP/s" << std::endl;
                        for (;;)
                        {
+                           sqlite3_exec(dbc, "BEGIN", NULL, NULL, NULL);
                            msg_perid = self->sts.msg_c;
                            sc_perid = self->sts.sc_c;
                            scp_perid = self->sts.sc_p;
@@ -99,10 +105,11 @@ void danmu::co_websocket::co_connect(netbase::yield_context yield)
                                 << std::setw(12) << self->sts.gf_a << std::setw(12) << (self->sts.gf_a - gf_perid) / 25.0
                                 << std::setw(12) << self->sts.gf_p / 1000.0 << std::setw(12) << (self->sts.gf_p - gfp_perid) / 25000.0
                                 << std::endl;
+                           sqlite3_exec(dbc, "COMMIT", NULL, NULL, NULL);
                        }
                    });
     flat_buffer buf;
-    Parser pack_parser(std::bind(&PrintBiliMsg, std::placeholders::_1, std::ref(sts)));
+    Parser pack_parser(std::bind(&PrintBiliMsg, std::placeholders::_1, std::ref(sts), std::ref(dbc)));
     for (;;)
     {
         size_t bytf = ws.async_read(buf, yield);
@@ -122,4 +129,17 @@ void danmu::co_websocket::stop()
                            throw system_error{ec};
                        }
                    });
+}
+
+void danmu::init_db(SQLPTR &db, unsigned int rid)
+{
+    int ec = sqlite3_open((std::to_string(rid) + ".sqlite").c_str(), &db);
+    if (ec != SQLITE_OK)
+    {
+        throw std::logic_error("database initialize failed.");
+    }
+    const char *text = "create table danmu(ID INTEGER PRIMARY KEY AUTOINCREMENT,NAME TEXT NOT NULL,\
+      MSG TEXT ,PRICE INT DEFAULT 0, TimeStamp NOT NULL DEFAULT (datetime(\'now\',\'localtime\')))";
+    char *zErrmsg = nullptr;
+    ec = sqlite3_exec(db, text, NULL, NULL, &zErrmsg);
 }
