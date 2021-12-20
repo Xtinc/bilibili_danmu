@@ -1,9 +1,7 @@
 #ifndef COUNTDANMU_H
 #define COUNTDANMU_H
 #include <unordered_map>
-#include <list>
-#include <memory>
-#include "netapps.h"
+#include "include/symbols.h"
 
 namespace danmu
 {
@@ -27,8 +25,13 @@ namespace danmu
         DM_SUPER_CHAT_MESSAGE,
         DM_SUPER_CHAT_MESSAGE_JPN,
         DM_NOTICE_MSG,
-        DM_HOT_ROOM_NOTIFY
+        DM_HOT_ROOM_NOTIFY,
+        DM_USER_TOAST_MSG,
+        DM_GUARD_BUY,
+        DM_ANCHOR_LOT_END,
+        DM_ANCHOR_LOT_AWARD,
     };
+
     class Bili_CMD_TYPE
     {
     private:
@@ -50,7 +53,9 @@ namespace danmu
             {"ONLINE_RANK_TOP3", BCMD::DM_ONLINE_RANK_TOP3},
             {"SUPER_CHAT_MESSAGE", BCMD::DM_SUPER_CHAT_MESSAGE},
             {"SUPER_CHAT_MESSAGE_JPN", BCMD::DM_SUPER_CHAT_MESSAGE_JPN},
-            {"NOTICE_MSG", BCMD::DM_NOTICE_MSG}};
+            {"NOTICE_MSG", BCMD::DM_NOTICE_MSG},
+            {"GUARD_BUY", BCMD::DM_GUARD_BUY},
+            {"HOT_ROOM_NOTIFY",BCMD::DM_HOT_ROOM_NOTIFY}};
 
     public:
         static BCMD Check(const char *cmd_typ)
@@ -77,7 +82,29 @@ namespace danmu
         };
     };
 
-    void ParseJSON(const char *msg, STS_INFO& sts);
+    void ParseJSON(const char *msg, STS_INFO &sts);
+
+    void PrintBiliMsg(DANMU_MSG &info, STS_INFO &sts);
+
+    class Parser
+    {
+    private:
+        std::string remained;
+        DANMU_HANDLE uhandler;
+
+    public:
+        Parser(DANMU_HANDLE &&uhd);
+        ~Parser();
+        Parser(const Parser &) = delete;
+        Parser(Parser &&) = delete;
+        Parser operator=(const Parser &) = delete;
+        Parser operator=(Parser &&) = delete;
+
+        void parser(const std::string &msg, size_t bytf);
+
+    private:
+        void process_data(const char *buf, unsigned int ilen, unsigned int typ);
+    };
 }
 
 #endif
