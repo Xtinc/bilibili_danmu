@@ -81,12 +81,12 @@ void danmu::co_websocket::co_connect(netbase::yield_context yield)
                        double gf_perid = 0;
                        double gfp_perid = 0;
 
-                       file << std::setw(20) << "#time" << std::setw(12) << "MSG_counts"
-                            << std::setw(12) << "MSG/s" << std::setw(12) << "SC_counts"
-                            << std::setw(12) << "SC/25s" << std::setw(12) << "SC_prices"
-                            << std::setw(12) << "SCP/25s" << std::setw(12) << "Gift_Wt"
-                            << std::setw(12) << "GFWt/s" << std::setw(12) << "Gift_prices"
-                            << std::setw(12) << "GFP/s" << std::endl;
+                       file << std::setw(20) << "#time" << std::setw(15) << "MSG_counts"
+                            << std::setw(15) << "MSG/s" << std::setw(15) << "SC_counts"
+                            << std::setw(15) << "SC/30s" << std::setw(15) << "SC_income"
+                            << std::setw(15) << "SCI/30s" << std::setw(15) << "Gift_Wt"
+                            << std::setw(15) << "GFWt/s" << std::setw(15) << "Gift_income"
+                            << std::setw(15) << "GFI/s" << std::endl;
                        for (;;)
                        {
                            sqlite3_exec(dbc, "BEGIN", NULL, NULL, NULL);
@@ -95,15 +95,15 @@ void danmu::co_websocket::co_connect(netbase::yield_context yield)
                            scp_perid = self->sts.sc_p;
                            gf_perid = self->sts.gf_a;
                            gfp_perid = self->sts.gf_p;
-                           self->hbt.expires_from_now(std::chrono::seconds(25));
+                           self->hbt.expires_from_now(std::chrono::seconds(30));
                            self->hbt.async_wait(yield);
                            self->ws.async_write(netbase::buffer(PING_PACK, 31), yield);
                            file << std::setw(20) << currentDateTime()
-                                << std::setw(12) << self->sts.msg_c << std::setw(12) << (self->sts.msg_c - msg_perid) / 25.0
-                                << std::setw(12) << self->sts.sc_c << std::setw(12) << self->sts.sc_c - sc_perid
-                                << std::setw(12) << self->sts.sc_p << std::setw(12) << self->sts.sc_p - scp_perid
-                                << std::setw(12) << self->sts.gf_a << std::setw(12) << (self->sts.gf_a - gf_perid) / 25.0
-                                << std::setw(12) << self->sts.gf_p / 1000.0 << std::setw(12) << (self->sts.gf_p - gfp_perid) / 25000.0
+                                << std::setw(15) << self->sts.msg_c << std::setw(15) << (self->sts.msg_c - msg_perid) / 30.0
+                                << std::setw(15) << self->sts.sc_c << std::setw(15) << self->sts.sc_c - sc_perid
+                                << std::setw(15) << self->sts.sc_p << std::setw(15) << self->sts.sc_p - scp_perid
+                                << std::setw(15) << self->sts.gf_a << std::setw(15) << (self->sts.gf_a - gf_perid) / 30.0
+                                << std::setw(15) << self->sts.gf_p / 1000.0 << std::setw(15) << (self->sts.gf_p - gfp_perid) / 30000.0
                                 << std::endl;
                            sqlite3_exec(dbc, "COMMIT", NULL, NULL, NULL);
                        }

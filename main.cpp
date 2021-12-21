@@ -61,7 +61,6 @@ int main(int argc, char **argv)
         STS_INFO statics_info;
         for (;;)
         {
-            ++cnt;
             try
             {
                 auto wss_test = std::make_shared<co_websocket>(auth_msg, statics_info, ioc, ctx);
@@ -71,7 +70,7 @@ int main(int argc, char **argv)
             }
             catch (std::runtime_error &e)
             {
-                if (cnt < 5)
+                if (cnt++ < 10)
                 {
                     netbase::steady_timer ertm(ioc, std::chrono::seconds(10));
                     std::cerr << "Error: " << e.what() << std::endl;

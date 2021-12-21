@@ -26,11 +26,14 @@ namespace danmu
         DM_SUPER_CHAT_MESSAGE_JPN,
         DM_NOTICE_MSG,
         DM_HOT_ROOM_NOTIFY,
-        DM_USER_TOAST_MSG,
         DM_GUARD_BUY,
         DM_ANCHOR_LOT_END,
         DM_ANCHOR_LOT_AWARD,
-        DMUSER_TOAST_MSG
+        DM_USER_TOAST_MSG,
+        DM_HOT_RANK_SETTLEMENT,
+        DM_HOT_RANK_SETTLEMENT_V2,
+        DM_PK_BATTLE_PROCESS,
+        DM_PK_BATTLE_PROCESS_NEW,
     };
 
     class Bili_CMD_TYPE
@@ -56,7 +59,11 @@ namespace danmu
             {"SUPER_CHAT_MESSAGE_JPN", BCMD::DM_SUPER_CHAT_MESSAGE_JPN},
             {"NOTICE_MSG", BCMD::DM_NOTICE_MSG},
             {"GUARD_BUY", BCMD::DM_GUARD_BUY},
-            {"HOT_ROOM_NOTIFY", BCMD::DM_HOT_ROOM_NOTIFY}};
+            {"HOT_ROOM_NOTIFY", BCMD::DM_HOT_ROOM_NOTIFY},
+            {"HOT_RANK_SETTLEMENT", BCMD::DM_HOT_RANK_SETTLEMENT},
+            {"HOT_RANK_SETTLEMENT_V2", BCMD::DM_HOT_RANK_SETTLEMENT_V2},
+            {"PK_BATTLE_PROCESS_NEW", BCMD::DM_PK_BATTLE_PROCESS_NEW},
+            {"PK_BATTLE_PROCESS", BCMD::DM_PK_BATTLE_PROCESS}};
 
     public:
         static BCMD Check(const char *cmd_typ)

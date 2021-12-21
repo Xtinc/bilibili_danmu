@@ -7,6 +7,7 @@
 
 #define _JSTR .get<std::string>()
 #define _JINT .get<int>()
+#define _ENDL '\n'
 
 using namespace danmu;
 using njson = nlohmann::json;
@@ -25,22 +26,21 @@ void danmu::ParseJSON(const char *msg, STS_INFO &sts, SQLPTR &db)
         switch (Bili_CMD_TYPE::Check(CMD))
         {
         case BCMD::DM_NONE:
-            std::cout << "Unknown command type: " << CMD << std::endl;
+            std::cout << "Unknown command type: " << CMD << _ENDL;
+            std::cout << msg << _ENDL;
             break;
         case BCMD::DM_DANMU_MSG:
             uname = j["info"][2][1] _JSTR;
             d_msg = j["info"][1] _JSTR;
             ++sts.msg_c;
-            std::cout << TMN << "MSG] " << uname << u8" 说 " << d_msg << std::endl;
+            std::cout << TMN << "MSG] " << uname << u8" 说 " << d_msg << _ENDL;
             d_msg = "INSERT INTO danmu (ID,NAME,MSG,PRICE) VALUES(NULL,\'" + uname + "\',\'" + d_msg + "\',0);";
             sqlite3_exec(db, d_msg.c_str(), NULL, NULL, NULL);
             break;
         case BCMD::DM_LIVE_INTERACTIVE_GAME:
-            //? 作用？
-            // std::cout << "[ACT] " << j["data"]["uname"] _JSTR << u8" 投喂 " << j["data"]["gift_name"] _JSTR << "x" << j["data"]["gift_num"] _JINT << std::endl;
             break;
         case BCMD::DM_NOTICE_MSG:
-            std::cout << TMN << "BDC] " << j["msg_common"] << std::endl;
+            std::cout << TMN << "BDC] " << j["msg_common"] << _ENDL;
             break;
         case BCMD::DM_SUPER_CHAT_MESSAGE:
         case BCMD::DM_SUPER_CHAT_MESSAGE_JPN:
@@ -50,7 +50,7 @@ void danmu::ParseJSON(const char *msg, STS_INFO &sts, SQLPTR &db)
             d_msg = j["data"]["message"] _JSTR;
             sts.sc_p += price;
             std::cout << TMN << "SPC] " << uname << u8" 打赏 " << " $" << price << u8" 说 "
-                      << d_msg << std::endl;
+                      << d_msg << _ENDL;
             d_msg = "INSERT INTO danmu (ID,NAME,MSG,PRICE) VALUES(NULL,\'" + uname + "\',\'" + d_msg + "\'," + std::to_string(price) + ");";
             sqlite3_exec(db, d_msg.c_str(), NULL, NULL, NULL);
             break;
@@ -60,7 +60,7 @@ void danmu::ParseJSON(const char *msg, STS_INFO &sts, SQLPTR &db)
             dms = j["data"]["dmscore"] _JINT;
             sts.gf_p += cnt * price;
             sts.gf_a += cnt * dms / 20.0;
-            std::cout << TMN << "GIF] " << j["data"]["uname"] _JSTR << " " << j["data"]["action"] _JSTR << " " << j["data"]["giftName"] _JSTR << "x" << cnt << std::endl;
+            std::cout << TMN << "GIF] " << j["data"]["uname"] _JSTR << " " << j["data"]["action"] _JSTR << " " << j["data"]["giftName"] _JSTR << "x" << cnt << _ENDL;
             break;
         case BCMD::DM_GUARD_BUY:
             cnt = j["data"]["num"] _JINT;
@@ -68,7 +68,11 @@ void danmu::ParseJSON(const char *msg, STS_INFO &sts, SQLPTR &db)
             dms = price;
             sts.gf_p += cnt * price;
             sts.gf_a += cnt * dms / 20.0;
-            std::cout << TMN << "ACT] " << j["data"]["username"] _JSTR << " " << u8" 购买 " << " " << j["data"]["gift_name"] _JSTR << "x" << cnt << std::endl;
+            std::cout << TMN << "ACT] " << j["data"]["username"] _JSTR << " " << u8" 购买 " << " " << j["data"]["gift_name"] _JSTR << "x" << cnt << _ENDL;
+            break;
+        case BCMD::DM_HOT_RANK_SETTLEMENT:
+        case BCMD::DM_HOT_RANK_SETTLEMENT_V2:
+            std::cout << TMN << "BDC] " << j["data"]["dm_msg"] _JSTR << _ENDL;
             break;
         case BCMD::DM_HOT_ROOM_NOTIFY:
         //?
@@ -84,7 +88,7 @@ void danmu::ParseJSON(const char *msg, STS_INFO &sts, SQLPTR &db)
         case BCMD::DM_ENTRY_EFFECT:
         // 舰长进入
         case BCMD::DM_ONLINE_RANK_COUNT:
-        // std::cout << "ONLINE_RANK_COUNT: " << j["data"]["count"].get<int>() << std::endl;
+        // std::cout << "ONLINE_RANK_COUNT: " << j["data"]["count"].get<int>() << _ENDL;
         case BCMD::DM_STOP_LIVE_ROOM_LIST:
         case BCMD::DM_INTERACT_WORD:
             // 普通用户进入

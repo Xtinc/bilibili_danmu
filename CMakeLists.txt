@@ -88,7 +88,7 @@ message(STATUS "------------------------------------------------")
 add_executable(danmu main.cpp netapps.cpp Countdanmu.cpp)
 target_compile_definitions(${PROJECT_NAME} PRIVATE -D_WIN32_WINNT=0x0601 -D_CRT_SECURE_NO_WARNINGS)
 target_compile_options(${PROJECT_NAME} PRIVATE /bigobj)
-target_link_options(${PROJECT_NAME} PRIVATE /NODEFAULTLIB:MSVCRT)
+#target_link_options(${PROJECT_NAME} PRIVATE /NODEFAULTLIB:MSVCRT)
 target_link_libraries(${PROJECT_NAME} ${Boost_LIBRARIES} SQLite::SQLite3 OpenSSL::SSL OpenSSL::Crypto Boost::boost ZLIB::ZLIB)
 ###########################################
 message(STATUS "-- Compile Definitions")
