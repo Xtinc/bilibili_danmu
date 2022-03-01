@@ -12,7 +12,7 @@
 using namespace danmu;
 using njson = nlohmann::json;
 
-void danmu::ParseJSON(const char *msg, STS_INFO &sts, SQLPTR &db)
+void danmu::ParseJSON(const char *msg, STS_INFO &sts, SQLPTR &db, std::string &str)
 {
     try
     {
@@ -32,6 +32,7 @@ void danmu::ParseJSON(const char *msg, STS_INFO &sts, SQLPTR &db)
         case BCMD::DM_DANMU_MSG:
             uname = j["info"][2][1] _JSTR;
             d_msg = j["info"][1] _JSTR;
+            str = str + " " + d_msg;
             ++sts.msg_c;
             std::cout << TMN << "MSG] " << uname << u8" 说 " << d_msg << _ENDL;
             d_msg = "INSERT INTO danmu (ID,NAME,MSG,PRICE) VALUES(NULL,\'" + uname + "\',\'" + d_msg + "\',0);";
@@ -248,7 +249,7 @@ void danmu::Parser::process_data(const char *buff, unsigned int ilen, unsigned i
     return;
 };
 
-void danmu::PrintBiliMsg(DANMU_MSG &info, STS_INFO &sts, SQLPTR &db)
+void danmu::PrintBiliMsg(DANMU_MSG &info, STS_INFO &sts, SQLPTR &db, std::string &str)
 {
     switch (info.type)
     {
@@ -258,7 +259,7 @@ void danmu::PrintBiliMsg(DANMU_MSG &info, STS_INFO &sts, SQLPTR &db)
     }
     case 0x05:
     {
-        ParseJSON(info.buff.get(), sts, db);
+        ParseJSON(info.buff.get(), sts, db, str);
         break;
     }
     case 0x08:

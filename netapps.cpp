@@ -3,6 +3,7 @@
 #include <boost/asio/buffers_iterator.hpp>
 #include <fstream>
 #include <sqlite3.h>
+#include <iostream>
 
 using namespace danmu;
 using namespace netapps;
@@ -30,15 +31,18 @@ std::string danmu::auth_pack(unsigned int room_id, const char *key)
     return std::string(msg, buflen + 16);
 }
 
-danmu::co_websocket::co_websocket(AUTHR_MSG _auth_msg, STS_INFO &_sts, netbase::io_context &ioc, netbase::ssl::context &ctx)
-    : ws(ioc, ctx), sts(_sts), hbt(ioc), resolver(ioc), auth_msg(_auth_msg)
+danmu::co_websocket::co_websocket(STS_INFO &_sts, SQLPTR &_dbc, std::ofstream &_file,
+                                  cppjieba::Jieba &_jieba, netbase::io_context &ioc,
+                                  netbase::ssl::context &ctx)
+    : ws(ioc, ctx), sts(_sts), dbc(_dbc), file(_file), hbt(ioc), resolver(ioc), jieba(_jieba)
 {
 }
 
 danmu::co_websocket::~co_websocket() {}
 
-void danmu::co_websocket::co_connect(netbase::yield_context yield)
+void danmu::co_websocket::co_connect(AUTHR_MSG _auth_msg, netbase::yield_context yield)
 {
+    auth_msg = _auth_msg;
     auto const results = resolver.async_resolve(auth_msg.host, auth_msg.port, yield);
     get_lowest_layer(ws).expires_after(std::chrono::seconds(15));
     auto ep = get_lowest_layer(ws).async_connect(results, yield);
@@ -63,33 +67,23 @@ void danmu::co_websocket::co_connect(netbase::yield_context yield)
     ws.async_write(netbase::buffer(authp.data(), authp.size()), yield);
     ws.async_write(netbase::buffer(PING_PACK, 31), yield);
     auto self = shared_from_this();
-    SQLPTR dbc;
-    auto db_guard = MakeGuard([&dbc]
-                              { sqlite3_close(dbc); });
-    init_db(dbc, auth_msg.rid);
     netbase::spawn(yield,
-                   [self, &dbc](netbase::yield_context yield)
+                   [self](netbase::yield_context yield)
                    {
-                       std::ofstream file(std::to_string(self->auth_msg.rid) + ".txt", std::ios::app);
-                       if (!file)
-                       {
-                           throw std::logic_error("Can't open output file for record.");
-                       }
                        int sc_perid = 0;
                        int scp_perid = 0;
                        double msg_perid = 0;
                        double gf_perid = 0;
                        double gfp_perid = 0;
-
-                       file << std::setw(20) << "#time" << std::setw(15) << "MSG_counts"
-                            << std::setw(15) << "MSG/s" << std::setw(15) << "SC_counts"
-                            << std::setw(15) << "SC/30s" << std::setw(15) << "SC_income"
-                            << std::setw(15) << "SCI/30s" << std::setw(15) << "Gift_Wt"
-                            << std::setw(15) << "GFWt/s" << std::setw(15) << "Gift_income"
-                            << std::setw(15) << "GFI/s" << std::endl;
+                       self->file << std::setw(20) << "#time" << std::setw(15) << "MSG_counts"
+                                  << std::setw(15) << "MSG/s" << std::setw(15) << "SC_counts"
+                                  << std::setw(15) << "SC/30s" << std::setw(15) << "SC_income"
+                                  << std::setw(15) << "SCI/30s" << std::setw(15) << "Gift_Wt"
+                                  << std::setw(15) << "GFWt/s" << std::setw(15) << "Gift_income"
+                                  << std::setw(15) << "GFI/s" << std::endl;
                        for (;;)
                        {
-                           sqlite3_exec(dbc, "BEGIN", NULL, NULL, NULL);
+                           sqlite3_exec(self->dbc, "BEGIN", NULL, NULL, NULL);
                            msg_perid = self->sts.msg_c;
                            sc_perid = self->sts.sc_c;
                            scp_perid = self->sts.sc_p;
@@ -98,18 +92,19 @@ void danmu::co_websocket::co_connect(netbase::yield_context yield)
                            self->hbt.expires_from_now(std::chrono::seconds(30));
                            self->hbt.async_wait(yield);
                            self->ws.async_write(netbase::buffer(PING_PACK, 31), yield);
-                           file << std::setw(20) << currentDateTime()
-                                << std::setw(15) << self->sts.msg_c << std::setw(15) << (self->sts.msg_c - msg_perid) / 30.0
-                                << std::setw(15) << self->sts.sc_c << std::setw(15) << self->sts.sc_c - sc_perid
-                                << std::setw(15) << self->sts.sc_p << std::setw(15) << self->sts.sc_p - scp_perid
-                                << std::setw(15) << self->sts.gf_a << std::setw(15) << (self->sts.gf_a - gf_perid) / 30.0
-                                << std::setw(15) << self->sts.gf_p / 1000.0 << std::setw(15) << (self->sts.gf_p - gfp_perid) / 30000.0
-                                << std::endl;
-                           sqlite3_exec(dbc, "COMMIT", NULL, NULL, NULL);
+                           self->file << std::setw(20) << currentDateTime()
+                                      << std::setw(15) << self->sts.msg_c << std::setw(15) << (self->sts.msg_c - msg_perid) / 30.0
+                                      << std::setw(15) << self->sts.sc_c << std::setw(15) << self->sts.sc_c - sc_perid
+                                      << std::setw(15) << self->sts.sc_p << std::setw(15) << self->sts.sc_p - scp_perid
+                                      << std::setw(15) << self->sts.gf_a << std::setw(15) << (self->sts.gf_a - gf_perid) / 30.0
+                                      << std::setw(15) << self->sts.gf_p / 1000.0 << std::setw(15) << (self->sts.gf_p - gfp_perid) / 30000.0
+                                      << std::endl;
+                           sqlite3_exec(self->dbc, "COMMIT", NULL, NULL, NULL);
+                           self->jieba_cut();
                        }
                    });
     flat_buffer buf;
-    Parser pack_parser(std::bind(&PrintBiliMsg, std::placeholders::_1, std::ref(sts), std::ref(dbc)));
+    Parser pack_parser(std::bind(&PrintBiliMsg, std::placeholders::_1, std::ref(sts), std::ref(dbc), std::ref(danmu_pool)));
     for (;;)
     {
         size_t bytf = ws.async_read(buf, yield);
@@ -138,8 +133,28 @@ void danmu::init_db(SQLPTR &db, unsigned int rid)
     {
         throw std::logic_error("database initialize failed.");
     }
-    const char *text = "create table danmu(ID INTEGER PRIMARY KEY AUTOINCREMENT,NAME TEXT NOT NULL,\
-      MSG TEXT ,PRICE INT DEFAULT 0, TimeStamp NOT NULL DEFAULT (datetime(\'now\',\'localtime\')))";
     char *zErrmsg = nullptr;
+    const char *text = "drop table if exists danmu;VACCUM;";
     ec = sqlite3_exec(db, text, NULL, NULL, &zErrmsg);
+    text = "create table danmu(ID INTEGER PRIMARY KEY AUTOINCREMENT,NAME TEXT NOT NULL,\
+      MSG TEXT ,PRICE INT DEFAULT 0, TimeStamp NOT NULL DEFAULT (datetime(\'now\',\'localtime\')))";
+    ec = sqlite3_exec(db, text, NULL, NULL, &zErrmsg);
+}
+
+void danmu::co_websocket::jieba_cut()
+{
+    if (danmu_pool.length() < 100)
+    {
+        return;
+    }
+    std::cout << "[Top words now]\n";
+    std::vector<cppjieba::KeywordExtractor::Word> keywordres;
+    jieba.extractor.Extract(danmu_pool, keywordres, 5);
+    for (auto &i : keywordres)
+    {
+        std::cout << i.word << " ";
+    }
+    std::cout << "\n";
+    danmu_pool = "";
+    return;
 }

@@ -90,9 +90,9 @@ namespace danmu
         };
     };
 
-    void ParseJSON(const char *msg, STS_INFO &sts, SQLPTR &db);
+    void ParseJSON(const char *msg, STS_INFO &sts, SQLPTR &db, std::string &str);
 
-    void PrintBiliMsg(DANMU_MSG &info, STS_INFO &sts, SQLPTR &db);
+    void PrintBiliMsg(DANMU_MSG &info, STS_INFO &sts, SQLPTR &db, std::string &str);
 
     class Parser
     {

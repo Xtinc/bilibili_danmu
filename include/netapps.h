@@ -1,8 +1,11 @@
 #ifndef BEAST_NETAPPS_H
 #define BEAST_NETAPPS_H
 
+#include <memory>
+
 #include "templates.h"
 #include "symbols.h"
+#include "cppjieba/Jieba.hpp"
 
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
@@ -64,15 +67,20 @@ namespace danmu
         netbase::ip::tcp::resolver resolver;
         AUTHR_MSG auth_msg;
         STS_INFO &sts;
+        SQLPTR &dbc;
+        std::ofstream &file;
+        std::string danmu_pool;
+        cppjieba::Jieba &jieba;
 
     public:
-        co_websocket(AUTHR_MSG _auth_msg, STS_INFO &_sts, netbase::io_context &ioc, netbase::ssl::context &ctx);
+        co_websocket(STS_INFO &_sts, SQLPTR &dbc, std::ofstream &file, cppjieba::Jieba &jieba, netbase::io_context &ioc, netbase::ssl::context &ctx);
         ~co_websocket();
         co_websocket(const co_websocket &) = delete;
         co_websocket(co_websocket &&) = delete;
         co_websocket operator=(const co_websocket &) = delete;
         co_websocket operator=(co_websocket &&) = delete;
-        void co_connect(netbase::yield_context yield);
+        void co_connect(AUTHR_MSG _auth_msg, netbase::yield_context yield);
+        void jieba_cut();
         void stop();
     };
 }
